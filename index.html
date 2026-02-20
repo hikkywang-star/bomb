@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>踩地雷</title>
+<title>踩地雷 - 純邏輯進階版</title>
 <style>
-  body, button, div, span, li, input {
+  body, button, div, span, li, input, select {
     background-color: #FFFFFF;
     font-size: 18px;
     font-weight: bold;
@@ -19,58 +19,122 @@
     align-items: center;
     margin-top: 10px;
     touch-action: manipulation;
+    overflow-x: hidden;
   }
   #game-container {
     text-align: center;
-    width: 320px;
+    width: 100%;
+    position: relative;
+    z-index: 10;
+    padding: 0 10px;
+    box-sizing: border-box;
   }
   
   #playerName {
     width: 100%;
+    max-width: 320px;
     box-sizing: border-box;
     padding: 8px;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     border: 2px solid #333;
     text-align: center;
+  }
+
+  .setup-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+  }
+
+  .difficulty-selector {
+    width: 100%;
+    max-width: 320px;
+    padding: 8px;
+    border: 2px solid #333;
+    text-align: center;
+    cursor: pointer;
+  }
+  
+  .custom-mines-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  
+  #custom-mines {
+    width: 80px;
+    text-align: center;
+    border: 2px solid #333;
+    padding: 6px;
   }
   
   .status-bar {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 15px;
+    align-items: flex-end;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto 15px auto;
     padding: 0 5px;
+    box-sizing: border-box;
   }
 
-  /* 踩地雷網格 */
-  #minesweeper-board {
-    display: grid;
-    grid-template-columns: repeat(9, 32px);
-    grid-template-rows: repeat(9, 32px);
-    gap: 2px;
-    justify-content: center;
+  .timer-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  /* 上方小按鈕專用樣式 */
+  .top-toggle-btn {
+    font-size: 14px;
+    padding: 6px 10px;
+    border: 2px solid #333;
+    cursor: pointer;
+  }
+  .top-toggle-btn:active {
+    color: #888;
+    border-color: #888;
+  }
+
+  .board-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    text-align: center; 
     margin-bottom: 15px;
+    padding-bottom: 10px; 
+  }
+
+  #minesweeper-board {
+    display: inline-grid;
+    gap: 2px;
+    margin: 0 auto;
   }
   
   .cell {
     width: 32px;
     height: 32px;
-    background-color: #E8E8E8; /* 未按過的格子：淺灰色 */
+    background-color: #E8E8E8; 
     border: 2px solid #333;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     user-select: none;
+    box-sizing: border-box;
   }
   
-  /* 滑鼠懸停效果，讓未按過的格子有互動感 */
   .cell:not(.revealed):hover {
     background-color: #D0D0D0; 
   }
   
   .cell.revealed {
     border: 1px solid #CCC;
-    background-color: #FFFFFF; /* 已按過的格子：純白色 */
+    background-color: #FFFFFF; 
   }
 
   .brand-label {
@@ -84,18 +148,21 @@
     border: 2px solid #333;
     cursor: pointer;
     width: 100%;
+    max-width: 320px;
   }
   .action-btn:active {
     color: #888;
     border-color: #888;
   }
 
-  /* 排行榜 */
   #scoreboard {
     margin-top: 30px;
     border-top: 2px solid #333;
     padding-top: 15px;
     text-align: left;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
   }
   .score-title {
     text-align: center;
@@ -129,6 +196,21 @@
     color: #888;
     border-color: #888;
   }
+
+  .confetti {
+    position: fixed;
+    top: -10px;
+    z-index: 9999;
+    width: 12px;
+    height: 12px;
+    animation: fall linear forwards;
+    opacity: 0.9;
+  }
+  @keyframes fall {
+    to {
+      transform: translateY(110vh) rotate(720deg);
+    }
+  }
 </style>
 </head>
 <body>
@@ -136,29 +218,47 @@
 <div id="game-container">
   <input type="text" id="playerName" placeholder="請輸入玩家名稱" value="匿名玩家">
   
+  <div class="setup-bar">
+    <select id="difficulty" class="difficulty-selector" onchange="changeDifficulty()">
+      <option value="easy">初級 (9x9 格)</option>
+      <option value="hard">進階 (16x16 格)</option>
+    </select>
+    
+    <div class="custom-mines-container">
+      <label for="custom-mines">地雷數量：</label>
+      <input type="number" id="custom-mines" value="10" min="1" onchange="initGame()">
+    </div>
+  </div>
+
   <div class="status-bar">
-    <span>💣 剩餘: <span id="mine-count">10</span></span>
-    <span>⏱️ 時間: <span id="timer">0</span> 秒</span>
+    <span style="margin-bottom: 2px;">💣 剩餘: <span id="mine-count">10</span></span>
+    <div class="timer-section">
+      <button id="mode-toggle-top" class="top-toggle-btn" onclick="toggleMode()">目前模式：⛏️ 挖掘</button>
+      <span>⏱️ 時間: <span id="timer">0</span> 秒</span>
+    </div>
   </div>
   
-  <div id="minesweeper-board" oncontextmenu="event.preventDefault();"></div>
+  <div class="board-wrapper">
+    <div id="minesweeper-board" oncontextmenu="event.preventDefault();"></div>
+  </div>
   
-  <button id="mode-toggle" class="action-btn" onclick="toggleMode()">目前模式：⛏️ 挖掘</button>
+  <button id="mode-toggle-bottom" class="action-btn" onclick="toggleMode()">目前模式：⛏️ 挖掘</button>
   <button class="action-btn" onclick="initGame()">重新開始</button>
 
-  <div class="brand-label">小狸老師整理</div>
+  <div class="brand-label">designer: Chris</div>
 
   <div id="scoreboard">
-    <div class="score-title">歷史最速紀錄 (9x9)</div>
+    <div class="score-title" id="score-title-text">歷史最速紀錄</div>
     <ul id="score-list">
     </ul>
   </div>
 </div>
 
 <script>
-  const ROWS = 9;
-  const COLS = 9;
-  const TOTAL_MINES = 10;
+  let ROWS = 9;
+  let COLS = 9;
+  let TOTAL_MINES = 10;
+  let currentDifficulty = 'easy';
   
   let board = [];
   let revealedCount = 0;
@@ -168,14 +268,47 @@
   
   let timerInterval;
   let seconds = 0;
-  
   let isDigMode = true; 
+
+  function changeDifficulty() {
+    const diff = document.getElementById('difficulty').value;
+    currentDifficulty = diff;
+    if (diff === 'easy') {
+      ROWS = 9; COLS = 9; 
+      document.getElementById('custom-mines').value = 10;
+    } else {
+      ROWS = 16; COLS = 16; 
+      document.getElementById('custom-mines').value = 40;
+    }
+    initGame();
+  }
 
   function initGame() {
     clearInterval(timerInterval);
     seconds = 0;
     document.getElementById('timer').innerText = seconds;
     
+    let desiredMines = parseInt(document.getElementById('custom-mines').value, 10);
+    let maxMines = (ROWS * COLS) - 9; 
+    
+    if (isNaN(desiredMines) || desiredMines < 1) {
+      desiredMines = 1;
+      document.getElementById('custom-mines').value = 1;
+    }
+    if (desiredMines > maxMines) {
+      desiredMines = maxMines;
+      document.getElementById('custom-mines').value = maxMines;
+      alert("地雷數過多！為確保遊戲能順利展開，已自動調整為上限：" + maxMines);
+    }
+    
+    TOTAL_MINES = desiredMines;
+    
+    if (currentDifficulty === 'easy') {
+      document.getElementById('score-title-text').innerText = `歷史最速紀錄 (9x9, ${TOTAL_MINES}雷)`;
+    } else {
+      document.getElementById('score-title-text').innerText = `歷史最速紀錄 (16x16, ${TOTAL_MINES}雷)`;
+    }
+
     revealedCount = 0;
     flagCount = 0;
     isGameOver = false;
@@ -187,12 +320,8 @@
       let row = [];
       for (let c = 0; c < COLS; c++) {
         row.push({
-          r: r,
-          c: c,
-          isMine: false,
-          revealed: false,
-          flagged: false,
-          neighborMines: 0
+          r: r, c: c,
+          isMine: false, revealed: false, flagged: false, neighborMines: 0
         });
       }
       board.push(row);
@@ -202,42 +331,159 @@
     updateScoreBoard();
   }
 
-  function placeMines(firstR, firstC) {
-    let minesPlaced = 0;
-    while (minesPlaced < TOTAL_MINES) {
-      let r = Math.floor(Math.random() * ROWS);
-      let c = Math.floor(Math.random() * COLS);
-      
-      if (!board[r][c].isMine && Math.abs(r - firstR) > 1 && Math.abs(c - firstC) > 1) {
-        board[r][c].isMine = true;
-        minesPlaced++;
+  function getNeighbors(r, c) {
+    let res = [];
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        let nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+          res.push({r: nr, c: nc});
+        }
       }
     }
-    calculateNeighbors();
+    return res;
   }
 
   function calculateNeighbors() {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
+        board[r][c].neighborMines = 0;
         if (board[r][c].isMine) continue;
         let count = 0;
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            let nr = r + dr;
-            let nc = c + dc;
-            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) {
-              count++;
-            }
-          }
+        for (let n of getNeighbors(r, c)) {
+          if (board[n.r][n.c].isMine) count++;
         }
         board[r][c].neighborMines = count;
       }
     }
   }
 
+  function getSolveStats(startR, startC) {
+    let safeSet = new Set();
+    let mineSet = new Set();
+    safeSet.add(`${startR},${startC}`);
+    
+    let toExpand = [{r: startR, c: startC}];
+    while (toExpand.length > 0) {
+      let curr = toExpand.pop();
+      if (board[curr.r][curr.c].neighborMines === 0) {
+        for (let n of getNeighbors(curr.r, curr.c)) {
+          let key = `${n.r},${n.c}`;
+          if (!safeSet.has(key)) {
+            safeSet.add(key);
+            toExpand.push(n);
+          }
+        }
+      }
+    }
+
+    let changed = true;
+    while (changed) {
+      changed = false;
+      let safeCells = Array.from(safeSet).map(s => {
+        let parts = s.split(',');
+        return {r: parseInt(parts[0]), c: parseInt(parts[1])};
+      });
+
+      for (let cell of safeCells) {
+        let r = cell.r, c = cell.c;
+        let mineCount = board[r][c].neighborMines;
+        if (mineCount === 0) continue;
+
+        let hiddenNeighbors = [];
+        let flaggedCount = 0;
+
+        for (let n of getNeighbors(r, c)) {
+          let key = `${n.r},${n.c}`;
+          if (mineSet.has(key)) {
+            flaggedCount++;
+          } else if (!safeSet.has(key)) {
+            hiddenNeighbors.push(n);
+          }
+        }
+
+        if (hiddenNeighbors.length === 0) continue;
+
+        if (mineCount === flaggedCount + hiddenNeighbors.length) {
+          for (let h of hiddenNeighbors) {
+            mineSet.add(`${h.r},${h.c}`);
+            changed = true;
+          }
+        }
+        else if (mineCount === flaggedCount) {
+          for (let h of hiddenNeighbors) {
+            safeSet.add(`${h.r},${h.c}`);
+            changed = true;
+          }
+        }
+      }
+    }
+
+    return {
+      isPerfect: safeSet.size === (ROWS * COLS - TOTAL_MINES),
+      solvedCount: safeSet.size
+    };
+  }
+
+  function placeMinesSolvable(firstR, firstC) {
+    let attempts = 0;
+    let maxSolved = -1;
+    let bestBoardState = null;
+    const MAX_ATTEMPTS = 500; 
+
+    let validSpots = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (Math.abs(r - firstR) > 1 || Math.abs(c - firstC) > 1) {
+          validSpots.push({r, c});
+        }
+      }
+    }
+
+    while (attempts < MAX_ATTEMPTS) { 
+      attempts++;
+      
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          board[r][c].isMine = false;
+        }
+      }
+
+      for (let i = validSpots.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [validSpots[i], validSpots[j]] = [validSpots[j], validSpots[i]];
+      }
+
+      for (let i = 0; i < TOTAL_MINES; i++) {
+        board[validSpots[i].r][validSpots[i].c].isMine = true;
+      }
+      
+      calculateNeighbors();
+
+      let stats = getSolveStats(firstR, firstC);
+      
+      if (stats.isPerfect) {
+        console.log(`生成 100% 邏輯圖！嘗試次數：${attempts}`);
+        return; 
+      }
+
+      if (stats.solvedCount > maxSolved) {
+        maxSolved = stats.solvedCount;
+        bestBoardState = board.map(row => row.map(cell => ({...cell})));
+      }
+    }
+    
+    console.log(`載入盲猜率最低的最佳圖 (最高可解 ${maxSolved} 格)`);
+    board = bestBoardState.map(row => row.map(cell => ({...cell})));
+  }
+
   function renderBoard() {
     const boardElement = document.getElementById('minesweeper-board');
     boardElement.innerHTML = '';
+    
+    boardElement.style.gridTemplateColumns = `repeat(${COLS}, 32px)`;
+    boardElement.style.gridTemplateRows = `repeat(${ROWS}, 32px)`;
     
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
@@ -284,17 +530,14 @@
   }
 
   function handleCellClick(r, c) {
-    if (document.activeElement.id === 'playerName') {
+    if (document.activeElement.id === 'playerName' || document.activeElement.id === 'custom-mines') {
       document.activeElement.blur();
     }
-
     if (isGameOver) return;
-    
     if (!isDigMode) {
       toggleFlag(r, c);
       return;
     }
-    
     revealCell(r, c);
   }
 
@@ -320,7 +563,8 @@
     
     if (isFirstClick) {
       isFirstClick = false;
-      placeMines(r, c);
+      placeMinesSolvable(r, c); 
+      
       timerInterval = setInterval(() => {
         seconds++;
         document.getElementById('timer').innerText = seconds;
@@ -337,24 +581,24 @@
     }
     
     if (cellData.neighborMines === 0) {
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          let nr = r + dr;
-          let nc = c + dc;
-          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-            revealCell(nr, nc);
-          }
-        }
+      for (let n of getNeighbors(r, c)) {
+        revealCell(n.r, n.c);
       }
     }
     
     checkWin();
   }
 
+  // 同步切換上下兩個按鈕的顯示文字
   function toggleMode() {
     isDigMode = !isDigMode;
-    const btn = document.getElementById('mode-toggle');
-    btn.innerText = isDigMode ? "目前模式：⛏️ 挖掘" : "目前模式：🚩 插旗";
+    const text = isDigMode ? "目前模式：⛏️ 挖掘" : "目前模式：🚩 插旗";
+    
+    const topBtn = document.getElementById('mode-toggle-top');
+    const bottomBtn = document.getElementById('mode-toggle-bottom');
+    
+    if(topBtn) topBtn.innerText = text;
+    if(bottomBtn) bottomBtn.innerText = text;
   }
 
   function updateMineCountDisplay() {
@@ -362,12 +606,31 @@
   }
 
   function checkWin() {
-    if (revealedCount === (ROWS * COLS) - TOTAL_MINES) {
+    if (!isGameOver && revealedCount === (ROWS * COLS) - TOTAL_MINES) {
       gameOver(true);
     }
   }
 
+  function fireConfetti() {
+    const colors = ['#FFB7B2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#C7CEEA', '#FF9AA2'];
+    for (let i = 0; i < 80; i++) {
+      let conf = document.createElement('div');
+      conf.className = 'confetti';
+      conf.style.left = Math.random() * 100 + 'vw';
+      conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      conf.style.animationDuration = (Math.random() * 2 + 2) + 's'; 
+      conf.style.animationDelay = (Math.random() * 0.5) + 's';
+      document.body.appendChild(conf);
+
+      setTimeout(() => {
+        if (conf.parentNode) conf.parentNode.removeChild(conf);
+      }, 5000);
+    }
+  }
+
   function gameOver(isWin) {
+    if (isGameOver) return; 
+    
     isGameOver = true;
     clearInterval(timerInterval);
     
@@ -382,12 +645,19 @@
     
     setTimeout(() => {
       if (isWin) {
-        alert("恭喜過關！您的時間是：" + seconds + " 秒");
-        saveRecord(seconds);
+        fireConfetti(); 
+        setTimeout(() => {
+          alert("恭喜過關！您的時間是：" + seconds + " 秒");
+          saveRecord(seconds);
+        }, 300); 
       } else {
         alert("踩到地雷了！遊戲結束。");
       }
     }, 100);
+  }
+
+  function getStorageKey() {
+    return currentDifficulty === 'hard' ? `minesweeperLogic_${TOTAL_MINES}M_16x16` : `minesweeperLogic_${TOTAL_MINES}M_9x9`;
   }
 
   function saveRecord(timeRecord) {
@@ -400,19 +670,21 @@
                     String(now.getMinutes()).padStart(2, '0');
                     
     const newRecord = { name: playerName, time: timeRecord, date: dateStr };
-    let records = JSON.parse(localStorage.getItem('minesweeperRecords')) || [];
+    const key = getStorageKey();
+    let records = JSON.parse(localStorage.getItem(key)) || [];
     
     records.push(newRecord);
     records.sort(function(a, b) { return a.time - b.time; });
     records = records.slice(0, 5); 
     
-    localStorage.setItem('minesweeperRecords', JSON.stringify(records));
+    localStorage.setItem(key, JSON.stringify(records));
     updateScoreBoard();
   }
 
   function updateScoreBoard() {
     const scoreList = document.getElementById('score-list');
-    let records = JSON.parse(localStorage.getItem('minesweeperRecords')) || [];
+    const key = getStorageKey();
+    let records = JSON.parse(localStorage.getItem(key)) || [];
     scoreList.innerHTML = '';
     
     if (records.length === 0) {
@@ -432,15 +704,21 @@
   }
 
   function deleteRecord(index) {
-    let records = JSON.parse(localStorage.getItem('minesweeperRecords')) || [];
+    const key = getStorageKey();
+    let records = JSON.parse(localStorage.getItem(key)) || [];
     records.splice(index, 1);
-    localStorage.setItem('minesweeperRecords', JSON.stringify(records));
+    localStorage.setItem(key, JSON.stringify(records));
     updateScoreBoard();
   }
 
-  document.getElementById('playerName').addEventListener('keydown', function(event) {
+  document.addEventListener('keydown', function(event) {
     if (event.keyCode === 13) {
-      this.blur();
+      if (document.activeElement.id === 'playerName' || document.activeElement.id === 'custom-mines') {
+        document.activeElement.blur();
+        if (document.activeElement.id === 'custom-mines') {
+          initGame();
+        }
+      }
     }
   });
 
@@ -448,3 +726,4 @@
 </script>
 </body>
 </html>
+
