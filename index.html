@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>踩地雷 - 純邏輯進階版</title>
+<title>踩地雷 - 純邏輯均勻版</title>
 <style>
   body, button, div, span, li, input, select {
     background-color: #FFFFFF;
@@ -89,7 +89,6 @@
     gap: 8px;
   }
 
-  /* 上方小按鈕專用樣式 */
   .top-toggle-btn {
     font-size: 14px;
     padding: 6px 10px;
@@ -426,12 +425,14 @@
     };
   }
 
+  // 均勻分布 + 邏輯驗證 生成器
   function placeMinesSolvable(firstR, firstC) {
     let attempts = 0;
     let maxSolved = -1;
     let bestBoardState = null;
     const MAX_ATTEMPTS = 500; 
 
+    // 取出第一下點擊外的所有合法空位
     let validSpots = [];
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
@@ -441,40 +442,69 @@
       }
     }
 
+    // 計算 5x5 範圍的動態地雷上限 (避免全部擠在同一區)
+    // 公式：依據整體地雷密度，推算 25 格中應有的地雷數，並加上一點寬容值
+    let localDensityMax = Math.ceil((TOTAL_MINES / validSpots.length) * 25) + 1;
+
     while (attempts < MAX_ATTEMPTS) { 
       attempts++;
       
+      // 清空面板
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
           board[r][c].isMine = false;
         }
       }
 
-      for (let i = validSpots.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [validSpots[i], validSpots[j]] = [validSpots[j], validSpots[i]];
-      }
+      // 複製一份空位清單用來洗牌抽籤
+      let availableSpots = [...validSpots];
+      let placedMines = 0;
+      let failCount = 0;
 
-      for (let i = 0; i < TOTAL_MINES; i++) {
-        board[validSpots[i].r][validSpots[i].c].isMine = true;
+      while (placedMines < TOTAL_MINES && availableSpots.length > 0) {
+        // 隨機抽取一個空位
+        let rIdx = Math.floor(Math.random() * availableSpots.length);
+        let spot = availableSpots[rIdx];
+
+        // 檢查該空位周圍 5x5 的現有地雷數
+        let localMinesCount = 0;
+        for(let dr = -2; dr <= 2; dr++) {
+          for(let dc = -2; dc <= 2; dc++) {
+            let nr = spot.r + dr;
+            let nc = spot.c + dc;
+            if(nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) {
+              localMinesCount++;
+            }
+          }
+        }
+
+        // 密度審核：若該區還沒超標，或是已經卡關重試了太多次 (避免高地雷數造成死迴圈)
+        if (localMinesCount < localDensityMax || failCount > 50) {
+          board[spot.r][spot.c].isMine = true;
+          availableSpots.splice(rIdx, 1);
+          placedMines++;
+          failCount = 0; // 成功放置就重置失敗計數
+        } else {
+          failCount++; // 該區太擠了，重新抽一張
+        }
       }
       
       calculateNeighbors();
-
       let stats = getSolveStats(firstR, firstC);
       
       if (stats.isPerfect) {
-        console.log(`生成 100% 邏輯圖！嘗試次數：${attempts}`);
+        console.log(`均勻邏輯圖生成成功！嘗試次數：${attempts}`);
         return; 
       }
 
+      // 紀錄邏輯解開度最高的一局當作備案
       if (stats.solvedCount > maxSolved) {
         maxSolved = stats.solvedCount;
         bestBoardState = board.map(row => row.map(cell => ({...cell})));
       }
     }
     
-    console.log(`載入盲猜率最低的最佳圖 (最高可解 ${maxSolved} 格)`);
+    console.log(`500次內未找到 100% 邏輯圖，載入最優化備案 (可解 ${maxSolved} 格)`);
     board = bestBoardState.map(row => row.map(cell => ({...cell})));
   }
 
@@ -589,7 +619,6 @@
     checkWin();
   }
 
-  // 同步切換上下兩個按鈕的顯示文字
   function toggleMode() {
     isDigMode = !isDigMode;
     const text = isDigMode ? "目前模式：⛏️ 挖掘" : "目前模式：🚩 插旗";
@@ -726,4 +755,3 @@
 </script>
 </body>
 </html>
-
